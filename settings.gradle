@@ -1,0 +1,4 @@
+rootProject.name = 'streamprocessor'
+
+include ':commons'
+project(':commons').projectDir = new File("../commons")
