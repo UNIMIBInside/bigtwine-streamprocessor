@@ -16,6 +16,7 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -123,6 +124,7 @@ public class TwitterStreamJob {
         final String twitterConsumerSecret = parameters.get("twitter-consumer-secret");
         final String twitterStreamQuery = parameters.get("twitter-stream-query", "apple,iphone,ipad,ios,android,samsung");
         final String twitterStreamLang = parameters.get("twitter-stream-lang", "en");
+        final int heartbeatInterval = parameters.getInt("heartbeat-interval", -1);
         final int twitterStreamSampling = parameters.getInt("twitter-stream-sampling", -1);
         final String[] twitterStreamQueryTerms = twitterStreamQuery.split(",");
         final String[] twitterStreamLangs = twitterStreamLang.split(",");
@@ -428,12 +430,51 @@ public class TwitterStreamJob {
 
                     return event;
                 })
-                .map(request -> new String(new JsonSerializer<>().serialize("analysis-results", request)))
+                .map(event -> new String(new JsonSerializer<>().serialize("analysis-results", event)))
                 .addSink(tweetsProcessedProducer);
 
         processedTweetsStream
                 .map(tweet -> "[PROCESSED] " + String.join(", ", new String[]{tweet.getStatus().getId(), tweet.getStatus().getUser().getId(), String.valueOf(tweet.getEntities().length)}))
                 .print();
+
+
+        if (heartbeatInterval > 0) {
+            FlinkKafkaProducer<String> heartbeatProducer = new FlinkKafkaProducer<>("job-heartbeats", new SimpleStringSchema(), kafkaProps);
+
+            env.addSource(new SourceFunction<Long>() {
+                private boolean shouldStop = false;
+                private int counter = 0;
+
+                @Override
+                public void run(SourceContext<Long> ctx) throws Exception {
+                    while (!shouldStop) {
+                        if (counter == heartbeatInterval) {
+                            counter = 0;
+                            ctx.collect(Instant.now().getEpochSecond());
+                        }
+
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) { }
+
+                        counter++;
+                    }
+                }
+
+                @Override
+                public void cancel() {
+                    shouldStop = true;
+                }
+            }).map((ts) -> {
+                JobHeartbeatEvent event = new JobHeartbeatEvent();
+                event.setJobId(jobId);
+                event.setTimestamp(Instant.ofEpochSecond(ts));
+
+                return event;
+            })
+                    .map(event -> new String(new JsonSerializer<>().serialize("job-heartbeats", event)))
+                    .addSink(heartbeatProducer);
+        }
 
         env.execute();
     }
