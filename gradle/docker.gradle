@@ -14,17 +14,12 @@ jib {
         image = 'openjdk:8-jre-alpine'
     }
     to {
-        image = '535233662260.dkr.ecr.eu-central-1.amazonaws.com/bigtwine/jobsupervisor'
+        image = '535233662260.dkr.ecr.eu-central-1.amazonaws.com/bigtwine/flink-streamprocessor'
         credHelper = 'ecr-login'
         tags = ['latest', project.version]
     }
     container {
         entrypoint = ['sh', '-c', 'chmod +x /entrypoint.sh && sync && /entrypoint.sh']
-        ports = ['9007']
-        environment = [
-            SPRING_OUTPUT_ANSI_ENABLED: 'ALWAYS',
-            JHIPSTER_SLEEP: '0'
-        ]
         useCurrentTimestamp = true
     }
 }
