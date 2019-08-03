@@ -3,7 +3,7 @@ buildscript {
         gradlePluginPortal()
     }
     dependencies {
-        classpath "gradle.plugin.com.google.cloud.tools:jib-gradle-plugin:0.9.11"
+        classpath "gradle.plugin.com.google.cloud.tools:jib-gradle-plugin:1.4.0"
     }
 }
 
@@ -19,8 +19,13 @@ jib {
         tags = ['latest', project.version]
     }
     container {
-        entrypoint = ['sh', '-c', 'chmod +x /entrypoint.sh && sync && /entrypoint.sh']
+        entrypoint = ['/entrypoint.sh']
         useCurrentTimestamp = true
+    }
+    extraDirectories {
+        permissions = [
+                '/entrypoint.sh': '755'
+        ]
     }
 }
 
