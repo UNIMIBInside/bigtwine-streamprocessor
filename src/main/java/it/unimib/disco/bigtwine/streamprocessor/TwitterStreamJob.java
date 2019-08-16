@@ -15,8 +15,11 @@ import it.unimib.disco.bigtwine.streamprocessor.response.GeoDecoderResponseMessa
 import it.unimib.disco.bigtwine.streamprocessor.response.LinkResolverResponseMessageParser;
 import it.unimib.disco.bigtwine.streamprocessor.response.NelResponseMessageParser;
 import it.unimib.disco.bigtwine.streamprocessor.response.NerResponseMessageParser;
+import it.unimib.disco.bigtwine.streamprocessor.source.GridFSCsvSource;
+import org.apache.commons.lang.BooleanUtils;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.typeinfo.TypeHint;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -27,6 +30,9 @@ import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer;
 import org.apache.flink.streaming.connectors.twitter.TwitterSource;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.StringUtils;
+import org.bson.types.ObjectId;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,51 +50,94 @@ public class TwitterStreamJob {
 
     public static void main(String[] args) throws Exception {
         ParameterTool parameters = ParameterTool.fromArgs(args);
-        final String jobId = parameters.get("job-id");
-        final String analysisId = parameters.get("analysis-id");
-        final String twitterToken = parameters.get("twitter-token");
-        final String twitterTokenSecret = parameters.get("twitter-token-secret");
-        final String twitterConsumerKey = parameters.get("twitter-consumer-key");
-        final String twitterConsumerSecret = parameters.get("twitter-consumer-secret");
-        final String twitterStreamQuery = parameters.get("twitter-stream-query", "apple,iphone,ipad,ios,android,samsung");
-        final String twitterStreamLang = parameters.get("twitter-stream-lang", "en");
+        final String jobId = parameters.getRequired("job-id");
+        final String analysisId = parameters.getRequired("analysis-id");
         final int heartbeatInterval = parameters.getInt("heartbeat-interval", -1);
-        final int twitterStreamSampling = parameters.getInt("twitter-stream-sampling", -1);
-        final boolean twitterSkipRetweets = parameters.getBoolean("twitter-skip-retweets", true);
-        final String[] twitterStreamQueryTerms = twitterStreamQuery.split(",");
-        final String[] twitterStreamLangs = twitterStreamLang.split(",");
+        final boolean twitterSkipRetweets = parameters.getBoolean("twitter-skip-retweets", false);
+        final String twitterStreamQuery = parameters.get("twitter-stream-query");
+        final String twitterStreamLocations = parameters.get("twitter-stream-locations");
+        final String datasetDocumentId = parameters.get("dataset-document-id");
 
-        // --twitter-token 96366271-uA7vHwZkeXSI7iJa0jHRUO68xEi7qG3TmF1Z44pJX \
-        // --twitter-token-secret ZuZqAoOrREHGg2P9TkhFjnZEAWhqfQ2Mx7CLUYpXCj2gB \
-        // --twitter-consumer-key K1RqX1M82afyenoSYxXgaKKpu \
-        // --twitter-consumer-secret zKzoBATHoanWi5XNDntwDn769j8Cx5yQPRvBvqxdq5Kys7iyXo
+        final boolean isQueryInput = twitterStreamQuery != null && !StringUtils.isNullOrWhitespaceOnly(twitterStreamQuery);
+        final boolean isLocationsInput = twitterStreamLocations != null && !StringUtils.isNullOrWhitespaceOnly(twitterStreamLocations);
+        final boolean isDatasetInput = datasetDocumentId != null && !StringUtils.isNullOrWhitespaceOnly(datasetDocumentId);
+        final boolean isStreamMode = isQueryInput || isLocationsInput;
+
+        int providedInputCount = 0;
+        providedInputCount += BooleanUtils.toInteger(isQueryInput);
+        providedInputCount += BooleanUtils.toInteger(isLocationsInput);
+        providedInputCount += BooleanUtils.toInteger(isDatasetInput);
+        
+        Preconditions.checkArgument(
+                providedInputCount == 1,
+                "Input not provided or multiple inputs provided" +
+                "only one of {} must be provided",
+                String.join(", ", new String[]{"twitter-stream-query", "twitter-stream-locations", "dataset-document-id"}));
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.getConfig().disableSysoutLogging();
 
-        LOG.debug("Stream query: {}", twitterStreamQuery);
+        DataStream<Tuple3<Double, Boolean, Map<String, String>>> datasetStream = null;
+        DataStream<String> rawTweetsStream;
 
-        // ----- TWITTER STREAM SOURCE
-        Properties twitterProps = new Properties();
-        twitterProps.setProperty(TwitterSource.CONSUMER_KEY, twitterConsumerKey);
-        twitterProps.setProperty(TwitterSource.CONSUMER_SECRET, twitterConsumerSecret);
-        twitterProps.setProperty(TwitterSource.TOKEN, twitterToken);
-        twitterProps.setProperty(TwitterSource.TOKEN_SECRET, twitterTokenSecret);
-        TwitterSource twitterSource = new TwitterSource(twitterProps);
-        twitterSource.setCustomEndpointInitializer(new FilterableTwitterEndpointInitializer(twitterStreamQueryTerms, twitterStreamLangs));
+        if (isStreamMode) {
+            final String twitterToken = parameters.getRequired("twitter-token");
+            final String twitterTokenSecret = parameters.getRequired("twitter-token-secret");
+            final String twitterConsumerKey = parameters.getRequired("twitter-consumer-key");
+            final String twitterConsumerSecret = parameters.getRequired("twitter-consumer-secret");
+            final String twitterStreamLang = parameters.get("twitter-stream-lang", "en");
+            final int twitterStreamSampling = parameters.getInt("twitter-stream-sampling", -1);
+            final String[] twitterStreamLangs = twitterStreamLang.split(",");
 
-        DataStream<String> rawTweetsStream = env
-                .addSource(twitterSource)
-                .setMaxParallelism(1)
-                .name("Tweets source");
+            LOG.debug("Stream query: {}", twitterStreamQuery);
 
-        if (twitterStreamSampling > 0) {
-            rawTweetsStream = rawTweetsStream
-                    .filter(new TwitterStatusSamplingFilter(twitterStreamSampling))
+            // ----- TWITTER STREAM SOURCE
+            Properties twitterProps = new Properties();
+            twitterProps.setProperty(TwitterSource.CONSUMER_KEY, twitterConsumerKey);
+            twitterProps.setProperty(TwitterSource.CONSUMER_SECRET, twitterConsumerSecret);
+            twitterProps.setProperty(TwitterSource.TOKEN, twitterToken);
+            twitterProps.setProperty(TwitterSource.TOKEN_SECRET, twitterTokenSecret);
+            TwitterSource twitterSource = new TwitterSource(twitterProps);
+
+            if (isQueryInput) {
+                final String[] twitterStreamQueryTerms = twitterStreamQuery.split(",");
+                twitterSource.setCustomEndpointInitializer(new FilterableTwitterEndpointInitializer(twitterStreamQueryTerms, twitterStreamLangs));
+            } else {
+                twitterSource.setCustomEndpointInitializer(new FilterableTwitterEndpointInitializer(twitterStreamLocations, twitterStreamLangs));
+            }
+
+            rawTweetsStream = env
+                    .addSource(twitterSource)
                     .setMaxParallelism(1)
-                    .name("Tweets sampling");
+                    .name("Tweets source");
 
-            LOG.debug("Sampling enabled: {} tweets per seconds", twitterStreamSampling);
+            if (twitterStreamSampling > 0) {
+                rawTweetsStream = rawTweetsStream
+                        .filter(new TwitterStatusSamplingFilter(twitterStreamSampling))
+                        .setMaxParallelism(1)
+                        .name("Tweets sampling");
+
+                LOG.debug("Sampling enabled: {} tweets per seconds", twitterStreamSampling);
+            }
+        } else if (isDatasetInput) {
+            GridFSCsvSource gridFsSource = new GridFSCsvSource(
+                    Constants.GRIDFS_HOST,
+                    Constants.GRIDFS_PORT,
+                    Constants.GRIDFS_DB,
+                    new ObjectId(datasetDocumentId));
+
+            datasetStream = env
+                    .addSource(gridFsSource)
+                    .setMaxParallelism(1)
+                    .name("Dataset source");
+
+            rawTweetsStream = datasetStream
+                    .map(t -> t.f2)
+                    .map(new MapToJsonSerializer())
+                    .setMaxParallelism(1)
+                    .name("Tweets source");
+        } else {
+            throw new RuntimeException("Missing input");
         }
 
         DataStream<Status> tweetsStream = rawTweetsStream
@@ -247,18 +296,38 @@ public class TwitterStreamJob {
 
         if (heartbeatInterval > 0) {
             FlinkKafkaProducer<String> heartbeatSink = new FlinkKafkaProducer<>("job-heartbeats", new SimpleStringSchema(), kafkaProps);
+            DataStream<JobHeartbeatEvent> heartbeatStream;
 
-            tweetsStream
-                    .map(t -> 1)
-                    .timeWindowAll(Time.seconds(heartbeatInterval))
-                    .reduce(Integer::sum)
-                    .map(count -> {
-                        JobHeartbeatEvent event = new JobHeartbeatEvent();
-                        event.setTimestamp(Instant.now());
-                        event.setJobId(jobId);
+            if (datasetStream == null) {
+                heartbeatStream = tweetsStream
+                        .map(t -> 1)
+                        .timeWindowAll(Time.seconds(heartbeatInterval))
+                        .reduce(Integer::sum)
+                        .map(count -> {
+                            JobHeartbeatEvent event = new JobHeartbeatEvent();
+                            event.setTimestamp(Instant.now());
+                            event.setJobId(jobId);
 
-                        return event;
-                    })
+                            return event;
+                        });
+
+            } else {
+                heartbeatStream = datasetStream
+                        .map(t -> new Tuple2<>(t.f0, t.f1))
+                        .timeWindowAll(Time.seconds(heartbeatInterval))
+                        .maxBy(0)
+                        .map(t -> {
+                            JobHeartbeatEvent event = new JobHeartbeatEvent();
+                            event.setTimestamp(Instant.now());
+                            event.setJobId(jobId);
+                            event.setProgress(t.f0);
+                            event.setLast(t.f1);
+
+                            return event;
+                        });
+            }
+
+            heartbeatStream
                     .map(event -> {
                         ObjectMapper mapper = new ObjectMapper();
                         mapper.registerModule(new JavaTimeModule());
@@ -267,25 +336,7 @@ public class TwitterStreamJob {
                         return new String(serializer.serialize("job-heartbeats", event));
                     })
                     .addSink(heartbeatSink);
-
-
-
         }
-
-        /*
-        if (heartbeatInterval > 0) {
-            env
-                    .addSource(new JobHeartbeatSource(jobId, heartbeatInterval))
-                    .map(event -> {
-                        ObjectMapper mapper = new ObjectMapper();
-                        mapper.registerModule(new JavaTimeModule());
-                        JsonSerializer<JobHeartbeatEvent> serializer = new JsonSerializer<>(mapper);
-
-                        return new String(serializer.serialize("job-heartbeats", event));
-                    })
-                    .addSink(heartbeatSink);
-        }
-             */
 
         env.execute();
     }

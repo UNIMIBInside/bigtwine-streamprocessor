@@ -1,4 +1,4 @@
-package it.unimib.disco.bigtwine.streamprocessor;
+package it.unimib.disco.bigtwine.streamprocessor.source;
 
 import it.unimib.disco.bigtwine.commons.messaging.JobHeartbeatEvent;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;

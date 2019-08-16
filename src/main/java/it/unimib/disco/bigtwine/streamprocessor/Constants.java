@@ -3,6 +3,10 @@ package it.unimib.disco.bigtwine.streamprocessor;
 public class Constants {
     public static final String KAFKA_BOOTSTRAP_SERVERS = "kafka:9092";
 
+    public static final String GRIDFS_HOST = "mysql";
+    public static final int GRIDFS_PORT = 27017;
+    public static final String GRIDFS_DB = "analysis";
+
     public static final String NER_INPUT_TOPIC = "ner-requests";
     public static final String NER_OUTPUT_TOPIC = "ner-responses.%s";
 

@@ -11,6 +11,7 @@ class FilterableTwitterEndpointInitializer implements TwitterSource.EndpointInit
 
     private String[] terms;
     private String[] langs;
+    private String locations;
 
     public FilterableTwitterEndpointInitializer() {
     }
@@ -24,6 +25,15 @@ class FilterableTwitterEndpointInitializer implements TwitterSource.EndpointInit
         this.langs = langs;
     }
 
+    public FilterableTwitterEndpointInitializer(String locations) {
+        this.locations = locations;
+    }
+
+    public FilterableTwitterEndpointInitializer(String locations, String[] langs) {
+        this.locations = locations;
+        this.langs = langs;
+    }
+
     @Override
     public StreamingEndpoint createEndpoint() {
         StatusesFilterEndpoint endpoint = new StatusesFilterEndpoint();
@@ -31,8 +41,13 @@ class FilterableTwitterEndpointInitializer implements TwitterSource.EndpointInit
         if (this.terms != null) {
             endpoint.trackTerms(Arrays.asList(this.terms));
         }
+
         if (this.langs != null) {
             endpoint.languages(Arrays.asList(this.langs));
+        }
+
+        if (this.locations != null) {
+            endpoint.addPostParameter("locations", this.locations);
         }
 
         return endpoint;
@@ -52,5 +67,13 @@ class FilterableTwitterEndpointInitializer implements TwitterSource.EndpointInit
 
     public void setLangs(String[] langs) {
         this.langs = langs;
+    }
+
+    public String getLocations() {
+        return locations;
+    }
+
+    public void setLocations(String locations) {
+        this.locations = locations;
     }
 }
