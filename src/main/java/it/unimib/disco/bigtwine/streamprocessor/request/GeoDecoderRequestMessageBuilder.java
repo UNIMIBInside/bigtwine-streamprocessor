@@ -9,6 +9,8 @@ import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 public class GeoDecoderRequestMessageBuilder extends AbstractRequestMessageBuilder<GeoDecoderRequestMessage, LocationDTO>
         implements AllWindowFunction<LocationDTO, GeoDecoderRequestMessage, TimeWindow> {
     private static final Logger LOG = LoggerFactory.getLogger(GeoDecoderRequestMessageBuilder.class);
@@ -21,6 +23,11 @@ public class GeoDecoderRequestMessageBuilder extends AbstractRequestMessageBuild
 
     public GeoDecoderRequestMessageBuilder(String outputTopic, String requestIdPrefix, String decoder) {
         super(outputTopic, requestIdPrefix);
+        this.decoder = decoder;
+    }
+
+    public GeoDecoderRequestMessageBuilder(String outputTopic, String requestIdPrefix, String decoder, int maxItemsPerRequest) {
+        super(outputTopic, requestIdPrefix, maxItemsPerRequest);
         this.decoder = decoder;
     }
 
@@ -48,9 +55,9 @@ public class GeoDecoderRequestMessageBuilder extends AbstractRequestMessageBuild
             return;
         }
 
-        GeoDecoderRequestMessage request = this.buildRequest(tweets);
-        out.collect(request);
+        List<GeoDecoderRequestMessage> requests = this.buildRequests(tweets);
+        requests.forEach(out::collect);
 
-        LOG.debug("Starting geo decoder processing {} location", request.getLocations().length);
+        LOG.debug("Starting geo decoder, {} requests produced", requests.size());
     }
 }

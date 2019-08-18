@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import it.unimib.disco.bigtwine.commons.messaging.AnalysisResultProducedEvent;
 import it.unimib.disco.bigtwine.commons.messaging.JobHeartbeatEvent;
-import it.unimib.disco.bigtwine.commons.models.LinkedEntity;
 import it.unimib.disco.bigtwine.commons.models.dto.*;
 import it.unimib.disco.bigtwine.streamprocessor.request.GeoDecoderRequestMessageBuilder;
 import it.unimib.disco.bigtwine.streamprocessor.request.LinkResolverRequestMessageBuilder;
@@ -42,6 +41,7 @@ import twitter4j.TwitterException;
 import twitter4j.TwitterObjectFactory;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -210,16 +210,7 @@ public class TwitterStreamJob {
         FlinkKafkaConsumer<String> linkSource = new FlinkKafkaConsumer<>(linkResolverOutputTopic, new SimpleStringSchema(), kafkaConsumerProps);
 
         linkedTweetsStream
-                .filter(tweet -> {
-                    int count = 0;
-                    for (LinkedEntity entity : tweet.getEntities()) {
-                        if (entity.getLink() != null) {
-                            count++;
-                        }
-                    }
-
-                    return count > 0;
-                })
+                .filter(TwitterNeelUtils::linkedTweetHasLinks)
                 .map(new LinkResolverRequestMessageBuilder(linkResolverOutputTopic, "linkresolver-request-"))
                 .map(new RequestMessageSerializer<>(linkResolverInputTopic))
                 .addSink(linkSink)
@@ -236,10 +227,10 @@ public class TwitterStreamJob {
         FlinkKafkaConsumer<String> geoSource = new FlinkKafkaConsumer<>(geoDecoderOutputTopic, new SimpleStringSchema(), kafkaConsumerProps);
 
         tweetsStream
-                .map(status -> new LocationDTO(status.getUser() != null ? status.getUser().getLocation() : "", String.valueOf(status.getId())))
-                .filter(loc -> loc.getTag() != null && loc.getAddress() != null)
+                .filter(TwitterNeelUtils::statusHasUserLocation)
+                .map(status -> new LocationDTO(status.getUser().getLocation(), String.valueOf(status.getId())))
                 .timeWindowAll(Time.seconds(3))
-                .apply(new GeoDecoderRequestMessageBuilder(geoDecoderOutputTopic, "geodecoder-reqeust-", geoDecoder))
+                .apply(new GeoDecoderRequestMessageBuilder(geoDecoderOutputTopic, "geodecoder-request-", geoDecoder, 15))
                 .map(new RequestMessageSerializer<>(geoDecoderInputTopic))
                 .addSink(geoSink)
                 .name("Geo decoder sink");
@@ -266,14 +257,26 @@ public class TwitterStreamJob {
                 .returns(new TypeHint<Tuple3<String, Object, StreamType>>(){})
                 .name("Resource tuple mapper");
 
+        DataStream<Tuple3<String, Object, StreamType>> emptyResourcesStream = linkedTweetsStream
+                .filter(TwitterNeelUtils::linkedTweetHasNotLinks)
+                .map(tweet -> new Tuple3<>(String.valueOf(tweet.getId()), (Object)new ArrayList<ResourceDTO>(), StreamType.resource))
+                .returns(new TypeHint<Tuple3<String, Object, StreamType>>(){})
+                .name("Empty resource tuple mapper");
+
         DataStream<Tuple3<String, Object, StreamType>> tupleLocationsStream = locationsStream
                 .filter((loc) -> loc != null && loc.getTag() != null)
                 .map(location -> new Tuple3<>(location.getTag(), (Object)location, StreamType.decodedLocation))
                 .returns(new TypeHint<Tuple3<String, Object, StreamType>>(){})
                 .name("Location tuple mapper");
 
+        DataStream<Tuple3<String, Object, StreamType>> emptyLocationsStream = tweetsStream
+                .filter(TwitterNeelUtils::statusHasNotUserLocation)
+                .map(tweet -> new Tuple3<>(String.valueOf(tweet.getId()), (Object)new DecodedLocationDTO(null, null, String.valueOf(tweet.getId())), StreamType.decodedLocation))
+                .returns(new TypeHint<Tuple3<String, Object, StreamType>>(){})
+                .name("Empty location tuple mapper");
+
         DataStream<NeelProcessedTweetDTO> processedTweetsStream = tupleTweetsStream
-                .union(tupleLinkedTweetsStream, tupleResourcesStream, tupleLocationsStream)
+                .union(tupleLinkedTweetsStream, tupleResourcesStream, emptyResourcesStream, tupleLocationsStream, emptyLocationsStream)
                 .keyBy(0)
                 .window(GlobalWindows.create())
                 .trigger(TwitterStreamTypeWindowTrigger.create(Time.seconds(processingTimeout)))

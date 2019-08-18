@@ -6,8 +6,6 @@ import it.unimib.disco.bigtwine.commons.models.dto.LinkDTO;
 import it.unimib.disco.bigtwine.commons.models.dto.LinkedEntityDTO;
 import it.unimib.disco.bigtwine.commons.models.dto.LinkedTweetDTO;
 import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
-import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +37,9 @@ public class LinkResolverRequestMessageBuilder extends AbstractRequestMessageBui
     public LinkResolverRequestMessage map(LinkedTweetDTO tweet) throws Exception {
         List<LinkDTO> links = new ArrayList<>();
         for (LinkedEntityDTO entity : tweet.getEntities()) {
-            links.add(new LinkDTO(entity.getLink(), tweet.getId()));
+            if (entity.getLink() != null) {
+                links.add(new LinkDTO(entity.getLink(), tweet.getId()));
+            }
         }
 
         LOG.debug("Starting link resolver processing {} links",links.size());
