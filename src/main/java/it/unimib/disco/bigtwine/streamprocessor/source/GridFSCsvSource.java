@@ -6,17 +6,16 @@ import com.mongodb.gridfs.GridFSDBFile;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.bson.types.ObjectId;
 
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Random;
 
-public class GridFSCsvSource implements SourceFunction<Tuple3<Double, Boolean, Map<String, String>>> {
+public class GridFSCsvSource implements SourceFunction<Map<String, String>> {
     private final String mongoHost;
     private final int mongoPort;
     private final String dbName;
@@ -44,9 +43,8 @@ public class GridFSCsvSource implements SourceFunction<Tuple3<Double, Boolean, M
     }
 
     @Override
-    public void run(SourceContext<Tuple3<Double, Boolean, Map<String, String>>> ctx) throws Exception {
+    public void run(SourceContext<Map<String, String>> ctx) throws Exception {
         GridFSDBFile file = this.getFs().findOne(this.objectId);
-        long fileLength = file.getLength();
         Reader reader = new InputStreamReader(file.getInputStream());
 
         CSVParser parser = CSVFormat.DEFAULT
@@ -56,22 +54,32 @@ public class GridFSCsvSource implements SourceFunction<Tuple3<Double, Boolean, M
                 .parse(reader);
         Iterator<CSVRecord> records = parser.iterator();
 
-        Random random = new Random();
+        long i = 0;
         while (records.hasNext()) {
             if (cancelled) {
                 break;
             }
+
             CSVRecord record = records.next();
-            boolean isLast = !records.hasNext();
-            double progress = isLast ? 1 : (record.getCharacterPosition() / (double)fileLength);
+            Map<String, String> recordMap = record.toMap();
 
-            Tuple3<Double, Boolean, Map<String, String>> out = new Tuple3<Double, Boolean, Map<String, String>>();
-            out.f0 = progress;
-            out.f1 = isLast;
-            out.f2 = record.toMap();
+            if (recordMap.size() > 0) {
+                ctx.collect(recordMap);
+            }
 
-            ctx.collect(out);
-            Thread.sleep(random.nextInt(200));
+            if (i % 10 == 0) {
+                ctx.markAsTemporarilyIdle();
+                Thread.sleep(25);
+            }
+
+            i++;
+        }
+
+        ctx.collect(new HashMap<>());
+        ctx.markAsTemporarilyIdle();
+
+        while (!cancelled) {
+            Thread.sleep(1000);
         }
     }
 

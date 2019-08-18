@@ -2,9 +2,9 @@ package it.unimib.disco.bigtwine.streamprocessor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import it.unimib.disco.bigtwine.commons.messaging.*;
-
-import it.unimib.disco.bigtwine.commons.models.*;
+import it.unimib.disco.bigtwine.commons.messaging.AnalysisResultProducedEvent;
+import it.unimib.disco.bigtwine.commons.messaging.JobHeartbeatEvent;
+import it.unimib.disco.bigtwine.commons.models.LinkedEntity;
 import it.unimib.disco.bigtwine.commons.models.dto.*;
 import it.unimib.disco.bigtwine.streamprocessor.request.GeoDecoderRequestMessageBuilder;
 import it.unimib.disco.bigtwine.streamprocessor.request.LinkResolverRequestMessageBuilder;
@@ -16,6 +16,7 @@ import it.unimib.disco.bigtwine.streamprocessor.response.LinkResolverResponseMes
 import it.unimib.disco.bigtwine.streamprocessor.response.NelResponseMessageParser;
 import it.unimib.disco.bigtwine.streamprocessor.response.NerResponseMessageParser;
 import it.unimib.disco.bigtwine.streamprocessor.source.GridFSCsvSource;
+import it.unimib.disco.bigtwine.streamprocessor.source.TimeSource;
 import org.apache.commons.lang.BooleanUtils;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.typeinfo.TypeHint;
@@ -33,16 +34,17 @@ import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.StringUtils;
 import org.bson.types.ObjectId;
-import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 import twitter4j.Status;
 import twitter4j.TwitterException;
 import twitter4j.TwitterObjectFactory;
 
-
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 
 public class TwitterStreamJob {
@@ -50,6 +52,9 @@ public class TwitterStreamJob {
 
     public static void main(String[] args) throws Exception {
         ParameterTool parameters = ParameterTool.fromArgs(args);
+
+        // Global params
+        int processingTimeout = 15;
         final String jobId = parameters.getRequired("job-id");
         final String analysisId = parameters.getRequired("analysis-id");
         final int heartbeatInterval = parameters.getInt("heartbeat-interval", -1);
@@ -77,7 +82,7 @@ public class TwitterStreamJob {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.getConfig().disableSysoutLogging();
 
-        DataStream<Tuple3<Double, Boolean, Map<String, String>>> datasetStream = null;
+        DataStream<Map<String, String>> datasetStream = null;
         DataStream<String> rawTweetsStream;
 
         if (isStreamMode) {
@@ -120,6 +125,9 @@ public class TwitterStreamJob {
                 LOG.debug("Sampling enabled: {} tweets per seconds", twitterStreamSampling);
             }
         } else if (isDatasetInput) {
+            processingTimeout = 30;
+            LOG.debug("Dataset document id: {}", datasetDocumentId);
+
             GridFSCsvSource gridFsSource = new GridFSCsvSource(
                     Constants.GRIDFS_HOST,
                     Constants.GRIDFS_PORT,
@@ -132,9 +140,7 @@ public class TwitterStreamJob {
                     .name("Dataset source");
 
             rawTweetsStream = datasetStream
-                    .map(t -> t.f2)
                     .map(new MapToJsonSerializer())
-                    .setMaxParallelism(1)
                     .name("Tweets source");
         } else {
             throw new RuntimeException("Missing input");
@@ -156,15 +162,18 @@ public class TwitterStreamJob {
                 .returns(Status.class)
                 .name("Tweets parsing");
 
-        Properties kafkaProps = new Properties();
-        kafkaProps.setProperty("bootstrap.servers", "kafka:9092");
-        kafkaProps.setProperty("group.id", "test");
+        Properties kafkaConsumerProps = new Properties();
+        kafkaConsumerProps.setProperty("bootstrap.servers", Constants.KAFKA_BOOTSTRAP_SERVERS);
+        kafkaConsumerProps.setProperty("group.id", "streamprocessor-" + jobId);
+
+        Properties kafkaProducerProps = new Properties();
+        kafkaProducerProps.setProperty("bootstrap.servers", Constants.KAFKA_BOOTSTRAP_SERVERS);
 
         final String nerInputTopic = Constants.NER_INPUT_TOPIC;
         final String nerOutputTopic = String.format(Constants.NER_OUTPUT_TOPIC, analysisId);
         final String nerRecognizer = parameters.get("ner-recognizer", null);
-        FlinkKafkaProducer<String> nerSink = new FlinkKafkaProducer<>(nerInputTopic, new SimpleStringSchema(), kafkaProps);
-        FlinkKafkaConsumer<String> nerSource = new FlinkKafkaConsumer<>(nerOutputTopic, new SimpleStringSchema(), kafkaProps);
+        FlinkKafkaProducer<String> nerSink = new FlinkKafkaProducer<>(nerInputTopic, new SimpleStringSchema(), kafkaProducerProps);
+        FlinkKafkaConsumer<String> nerSource = new FlinkKafkaConsumer<>(nerOutputTopic, new SimpleStringSchema(), kafkaConsumerProps);
 
         tweetsStream
                 .map(status -> new BasicTweetDTO(String.valueOf(status.getId()), status.getText()))
@@ -181,8 +190,8 @@ public class TwitterStreamJob {
         final String nelInputTopic = Constants.NEL_INPUT_TOPIC;
         final String nelOutputTopic = String.format(Constants.NEL_OUTPUT_TOPIC, analysisId);
         final String nelLinker = parameters.get("nel-linker", null);
-        FlinkKafkaProducer<String> nelSink = new FlinkKafkaProducer<>(nelInputTopic, new SimpleStringSchema(), kafkaProps);
-        FlinkKafkaConsumer<String> nelSource = new FlinkKafkaConsumer<>(nelOutputTopic, new SimpleStringSchema(), kafkaProps);
+        FlinkKafkaProducer<String> nelSink = new FlinkKafkaProducer<>(nelInputTopic, new SimpleStringSchema(), kafkaProducerProps);
+        FlinkKafkaConsumer<String> nelSource = new FlinkKafkaConsumer<>(nelOutputTopic, new SimpleStringSchema(), kafkaConsumerProps);
 
         recognizedTweetsStream
                 .timeWindowAll(Time.seconds(3))
@@ -197,8 +206,8 @@ public class TwitterStreamJob {
 
         final String linkResolverInputTopic = Constants.LINKRESOLVER_INPUT_TOPIC;
         final String linkResolverOutputTopic = String.format(Constants.LINKRESOLVER_OUTPUT_TOPIC, analysisId);
-        FlinkKafkaProducer<String> linkSink = new FlinkKafkaProducer<>(linkResolverInputTopic, new SimpleStringSchema(), kafkaProps);
-        FlinkKafkaConsumer<String> linkSource = new FlinkKafkaConsumer<>(linkResolverOutputTopic, new SimpleStringSchema(), kafkaProps);
+        FlinkKafkaProducer<String> linkSink = new FlinkKafkaProducer<>(linkResolverInputTopic, new SimpleStringSchema(), kafkaProducerProps);
+        FlinkKafkaConsumer<String> linkSource = new FlinkKafkaConsumer<>(linkResolverOutputTopic, new SimpleStringSchema(), kafkaConsumerProps);
 
         linkedTweetsStream
                 .filter(tweet -> {
@@ -223,12 +232,12 @@ public class TwitterStreamJob {
         final String geoDecoderInputTopic = Constants.GEODECODER_INPUT_TOPIC;
         final String geoDecoderOutputTopic = String.format(Constants.GEODECODER_OUTPUT_TOPIC, analysisId);
         final String geoDecoder = parameters.get("geo-decoder", "default");
-        FlinkKafkaProducer<String> geoSink = new FlinkKafkaProducer<>(geoDecoderInputTopic, new SimpleStringSchema(), kafkaProps);
-        FlinkKafkaConsumer<String> geoSource = new FlinkKafkaConsumer<>(geoDecoderOutputTopic, new SimpleStringSchema(), kafkaProps);
+        FlinkKafkaProducer<String> geoSink = new FlinkKafkaProducer<>(geoDecoderInputTopic, new SimpleStringSchema(), kafkaProducerProps);
+        FlinkKafkaConsumer<String> geoSource = new FlinkKafkaConsumer<>(geoDecoderOutputTopic, new SimpleStringSchema(), kafkaConsumerProps);
 
         tweetsStream
-                .map(status -> new LocationDTO(status.getUser().getLocation(), String.valueOf(status.getId())))
-                .filter(loc -> loc.getTag() != null && loc.getAddress() != null && !loc.getAddress().isEmpty())
+                .map(status -> new LocationDTO(status.getUser() != null ? status.getUser().getLocation() : "", String.valueOf(status.getId())))
+                .filter(loc -> loc.getTag() != null && loc.getAddress() != null)
                 .timeWindowAll(Time.seconds(3))
                 .apply(new GeoDecoderRequestMessageBuilder(geoDecoderOutputTopic, "geodecoder-reqeust-", geoDecoder))
                 .map(new RequestMessageSerializer<>(geoDecoderInputTopic))
@@ -267,11 +276,11 @@ public class TwitterStreamJob {
                 .union(tupleLinkedTweetsStream, tupleResourcesStream, tupleLocationsStream)
                 .keyBy(0)
                 .window(GlobalWindows.create())
-                .trigger(TwitterStreamTypeWindowTrigger.create(Time.seconds(15)))
+                .trigger(TwitterStreamTypeWindowTrigger.create(Time.seconds(processingTimeout)))
                 .apply(new NeelProcessedTweetWindowFunction())
                 .name("Neel processed tweet assembler");
 
-        FlinkKafkaProducer<String> tweetsProcessedProducer = new FlinkKafkaProducer<>("analysis-results", new SimpleStringSchema(), kafkaProps);
+        FlinkKafkaProducer<String> tweetsProcessedProducer = new FlinkKafkaProducer<>("analysis-results", new SimpleStringSchema(), kafkaProducerProps);
 
         processedTweetsStream
                 .map((tweet) -> {
@@ -294,8 +303,9 @@ public class TwitterStreamJob {
                 .addSink(tweetsProcessedProducer)
                 .name("NEEL Output Sink");
 
+        LOG.debug("Heartbeat interval: {}", heartbeatInterval);
         if (heartbeatInterval > 0) {
-            FlinkKafkaProducer<String> heartbeatSink = new FlinkKafkaProducer<>("job-heartbeats", new SimpleStringSchema(), kafkaProps);
+            FlinkKafkaProducer<String> heartbeatSink = new FlinkKafkaProducer<>("job-heartbeats", new SimpleStringSchema(), kafkaProducerProps);
             DataStream<JobHeartbeatEvent> heartbeatStream;
 
             if (datasetStream == null) {
@@ -312,16 +322,41 @@ public class TwitterStreamJob {
                         });
 
             } else {
-                heartbeatStream = datasetStream
-                        .map(t -> new Tuple2<>(t.f0, t.f1))
-                        .timeWindowAll(Time.seconds(heartbeatInterval))
-                        .maxBy(0)
+
+                DataStream<Tuple2<Integer, Integer>> s0 = env
+                        .addSource(new TimeSource())
+                        .map(ts -> new Tuple2<>(0, ts))
+                        .returns(new TypeHint<Tuple2<Integer, Integer>>() {});
+
+                DataStream<Tuple2<Integer, Integer>> s1 = datasetStream
+                        .filter(Map::isEmpty)
+                        .map(m -> new Tuple2<>(1, 1))
+                        .returns(new TypeHint<Tuple2<Integer, Integer>>() {});
+
+                DataStream<Tuple2<Integer, Integer>> s2 = tweetsStream
+                        .map(t -> new Tuple2<>(2, 1))
+                        .returns(new TypeHint<Tuple2<Integer, Integer>>() {});
+
+                DataStream<Tuple2<Integer, Integer>> s3 = processedTweetsStream
+                        .map(t -> new Tuple2<>(3, 1))
+                        .returns(new TypeHint<Tuple2<Integer, Integer>>() {});
+
+
+                DataStream<Tuple2<Double, Boolean>> progressStream = s0
+                        .union(s1, s2, s3)
+                        .windowAll(GlobalWindows.create())
+                        .trigger(DatasetProgressWindowTrigger.create(Time.seconds(heartbeatInterval)))
+                        .apply(DatasetProgressWindowFunction.create(Time.seconds(processingTimeout + 5)))
+                        .setMaxParallelism(1);
+
+                heartbeatStream = progressStream
                         .map(t -> {
                             JobHeartbeatEvent event = new JobHeartbeatEvent();
                             event.setTimestamp(Instant.now());
                             event.setJobId(jobId);
                             event.setProgress(t.f0);
                             event.setLast(t.f1);
+                            LOG.debug("Sending heartbeat with progress: {}, last: {}", t.f0, t.f1);
 
                             return event;
                         });
