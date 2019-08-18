@@ -54,7 +54,6 @@ public class TwitterStreamJob {
         ParameterTool parameters = ParameterTool.fromArgs(args);
 
         // Global params
-        int processingTimeout = 15;
         final String jobId = parameters.getRequired("job-id");
         final String analysisId = parameters.getRequired("analysis-id");
         final int heartbeatInterval = parameters.getInt("heartbeat-interval", -1);
@@ -68,6 +67,8 @@ public class TwitterStreamJob {
         final boolean isDatasetInput = datasetDocumentId != null && !StringUtils.isNullOrWhitespaceOnly(datasetDocumentId);
         final boolean isStreamMode = isQueryInput || isLocationsInput;
 
+        final int processingTimeout = parameters.getInt("processing-timeout", isStreamMode ? 15 : 30);
+
         int providedInputCount = 0;
         providedInputCount += BooleanUtils.toInteger(isQueryInput);
         providedInputCount += BooleanUtils.toInteger(isLocationsInput);
@@ -79,8 +80,20 @@ public class TwitterStreamJob {
                 "only one of {} must be provided",
                 String.join(", ", new String[]{"twitter-stream-query", "twitter-stream-locations", "dataset-document-id"}));
 
+        Preconditions.checkArgument(processingTimeout > 0, "Processing timeout must be expressed in seconds and greater then 0");
+
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.getConfig().disableSysoutLogging();
+
+        LOG.info(
+                "Twitter Neel Job started with configuration:\n" +
+                        "\tjobId = {}\n" +
+                        "\tanalysisId = {}\n" +
+                        "\theartbeatInterval = {}\n" +
+                        "\ttwitterSkipRetweets = {}\n" +
+                        "\tprocessingTimeout = {}",
+                jobId, analysisId, heartbeatInterval, twitterSkipRetweets, processingTimeout
+        );
 
         DataStream<Map<String, String>> datasetStream = null;
         DataStream<String> rawTweetsStream;
@@ -94,7 +107,15 @@ public class TwitterStreamJob {
             final int twitterStreamSampling = parameters.getInt("twitter-stream-sampling", -1);
             final String[] twitterStreamLangs = twitterStreamLang.split(",");
 
-            LOG.debug("Stream query: {}", twitterStreamQuery);
+            LOG.info(
+                    "Stream configuration:\n" +
+                            "\ttwitterToken = {}\n" +
+                            "\ttwitterTokenSecret = *****\n" +
+                            "\ttwitterConsumerKey = {}\n" +
+                            "\ttwitterConsumerSecret = *****\n" +
+                            "\ttwitterStreamLang = {}\n" +
+                            "\ttwitterStreamSampling = {}",
+                    twitterToken, twitterConsumerKey, twitterStreamLang, twitterStreamSampling);
 
             // ----- TWITTER STREAM SOURCE
             Properties twitterProps = new Properties();
@@ -105,9 +126,11 @@ public class TwitterStreamJob {
             TwitterSource twitterSource = new TwitterSource(twitterProps);
 
             if (isQueryInput) {
+                LOG.info("Stream query: {}", twitterStreamQuery);
                 final String[] twitterStreamQueryTerms = twitterStreamQuery.split(",");
                 twitterSource.setCustomEndpointInitializer(new FilterableTwitterEndpointInitializer(twitterStreamQueryTerms, twitterStreamLangs));
             } else {
+                LOG.info("Stream bounding boxes: {}", twitterStreamLocations);
                 twitterSource.setCustomEndpointInitializer(new FilterableTwitterEndpointInitializer(twitterStreamLocations, twitterStreamLangs));
             }
 
@@ -122,11 +145,10 @@ public class TwitterStreamJob {
                         .setMaxParallelism(1)
                         .name("Tweets sampling");
 
-                LOG.debug("Sampling enabled: {} tweets per seconds", twitterStreamSampling);
+                LOG.info("Sampling enabled: {} tweets per seconds", twitterStreamSampling);
             }
         } else if (isDatasetInput) {
-            processingTimeout = 30;
-            LOG.debug("Dataset document id: {}", datasetDocumentId);
+            LOG.info("Dataset document id: {}", datasetDocumentId);
 
             GridFSCsvSource gridFsSource = new GridFSCsvSource(
                     Constants.GRIDFS_HOST,
