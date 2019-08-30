@@ -7,6 +7,11 @@ public class Constants {
     public static final int GRIDFS_PORT = getEnv("GRIDFS_PORT", 27017);
     public static final String GRIDFS_DB = getEnv("GRIDFS_DB", "analysis");
 
+    public static final String MONGO_HOST = getEnv("MONGO_HOST", "mongodb");
+    public static final int MONGO_PORT = getEnv("MONGO_PORT", 27017);
+    public static final String MONGO_ANALYSIS_DB = getEnv("MONGO_ANALYSIS_DB", "analysis");
+    public static final String MONGO_RESULTS_COLLECTION = getEnv("MONGO_RESULTS_COLLECTION", "analyses.results");
+
     public static final String NER_INPUT_TOPIC = getEnv("NER_INPUT_TOPIC", "ner-requests");
     public static final String NER_OUTPUT_TOPIC = getEnv("NER_OUTPUT_TOPIC", "ner-responses.%s");
 
@@ -18,6 +23,8 @@ public class Constants {
 
     public static final String GEODECODER_INPUT_TOPIC = getEnv("GEODECODER_INPUT_TOPIC", "geodecoder-requests");
     public static final String GEODECODER_OUTPUT_TOPIC = getEnv("GEODECODER_OUTPUT_TOPIC", "geodecoder-responses.%s");
+
+    public static final String JOB_HEARTBEATS_TOPIC = getEnv("JOB_HEARTBEATS_TOPIC", "job-heartbeats");
 
     public static String getEnv(String name, String fallback) {
         String value = System.getenv(name);
