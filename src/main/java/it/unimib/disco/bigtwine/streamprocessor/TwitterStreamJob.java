@@ -50,17 +50,44 @@ import java.util.Properties;
 public class TwitterStreamJob {
     private static final Logger LOG = LoggerFactory.getLogger(TwitterStreamJob.class);
 
-    public static void main(String[] args) throws Exception {
-        ParameterTool parameters = ParameterTool.fromArgs(args);
+    public static void main(String[] args) {
+        JobHeartbeatSender heartbeatSender = null;
+        try {
+            ParameterTool parameters = ParameterTool.fromArgs(args);
 
+            final String jobId = parameters.getRequired("job-id");
+            final int heartbeatInterval = parameters.getInt("heartbeat-interval", -1);
+
+            if(heartbeatInterval > 0) {
+                heartbeatSender = new JobHeartbeatSender(
+                        Constants.KAFKA_BOOTSTRAP_SERVERS,
+                        Constants.JOB_HEARTBEATS_TOPIC,
+                        jobId,
+                        heartbeatInterval);
+            }
+
+            launchJob(jobId, parameters);
+
+            if (heartbeatSender != null) {
+                heartbeatSender.sendLast();
+            }
+        } catch (Exception e) {
+            LOG.error("Job failed", e);
+
+            if (heartbeatSender != null) {
+                heartbeatSender.sendError(e.getLocalizedMessage());
+            }
+        }
+    }
+
+    private static void launchJob(String jobId, ParameterTool parameters) throws Exception {
         // Global params
-        final String jobId = parameters.getRequired("job-id");
         final String analysisId = parameters.getRequired("analysis-id");
-        final int heartbeatInterval = parameters.getInt("heartbeat-interval", -1);
         final boolean twitterSkipRetweets = parameters.getBoolean("twitter-skip-retweets", false);
         final String twitterStreamQuery = parameters.get("twitter-stream-query");
         final String twitterStreamLocations = parameters.get("twitter-stream-locations");
         final String datasetDocumentId = parameters.get("dataset-document-id");
+        final int heartbeatInterval = parameters.getInt("heartbeat-interval", -1);
 
         final boolean isQueryInput = twitterStreamQuery != null && !StringUtils.isNullOrWhitespaceOnly(twitterStreamQuery);
         final boolean isLocationsInput = twitterStreamLocations != null && !StringUtils.isNullOrWhitespaceOnly(twitterStreamLocations);
@@ -330,7 +357,7 @@ public class TwitterStreamJob {
 
         LOG.debug("Heartbeat interval: {}", heartbeatInterval);
         if (heartbeatInterval > 0) {
-            FlinkKafkaProducer<String> heartbeatSink = new FlinkKafkaProducer<>("job-heartbeats", new SimpleStringSchema(), kafkaProducerProps);
+            FlinkKafkaProducer<String> heartbeatSink = new FlinkKafkaProducer<>(Constants.JOB_HEARTBEATS_TOPIC, new SimpleStringSchema(), kafkaProducerProps);
             DataStream<JobHeartbeatEvent> heartbeatStream;
 
             if (datasetStream == null) {
@@ -393,7 +420,7 @@ public class TwitterStreamJob {
                         mapper.registerModule(new JavaTimeModule());
                         JsonSerializer<JobHeartbeatEvent> serializer = new JsonSerializer<>(mapper);
 
-                        return new String(serializer.serialize("job-heartbeats", event));
+                        return new String(serializer.serialize(Constants.JOB_HEARTBEATS_TOPIC, event));
                     })
                     .addSink(heartbeatSink);
         }
