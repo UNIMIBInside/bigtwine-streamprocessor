@@ -22,7 +22,7 @@ import java.util.Arrays;
 public class ExportResultsJob {
     private static final Logger LOG = LoggerFactory.getLogger(ExportResultsJob.class);
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         JobHeartbeatSender heartbeatSender = null;
         try {
             ParameterTool parameters = ParameterTool.fromArgs(args);
@@ -39,6 +39,7 @@ public class ExportResultsJob {
             }
 
             launchJob(jobId, parameters, heartbeatSender);
+            LOG.info("Job completed with success");
 
             if (heartbeatSender != null) {
                 heartbeatSender.sendLast();
@@ -50,6 +51,8 @@ public class ExportResultsJob {
                 heartbeatSender.sendError(e.getLocalizedMessage());
             }
         }
+
+        Thread.sleep(500);
     }
 
     private static void launchJob(String jobId, ParameterTool parameters, JobHeartbeatSender heartbeatSender) throws Exception {
@@ -59,9 +62,10 @@ public class ExportResultsJob {
         final String gridFsConnectionUri = String.format("mongodb://%s:%d", Constants.GRIDFS_HOST, Constants.GRIDFS_PORT);
         final String gridFsDbName = Constants.GRIDFS_DB;
 
-        final String analysisId = parameters.getRequired("analysis-id");
-        final String documentId = parameters.getRequired("document-id");
-        // final String documentId = org.bson.types.ObjectId.get().toHexString();
+        // final String analysisId = parameters.getRequired("analysis-id");
+        // final String documentId = parameters.getRequired("document-id");
+        final String analysisId = "5d6c1418afd5c800014680bc";
+        final String documentId = org.bson.types.ObjectId.get().toHexString();
 
         MongoClient mongoClient = MongoClients.create(mongoConnectionUri);
         MongoCollection<Document> collection = mongoClient

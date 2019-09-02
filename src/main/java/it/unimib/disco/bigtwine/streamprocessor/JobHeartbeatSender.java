@@ -3,6 +3,8 @@ package it.unimib.disco.bigtwine.streamprocessor;
 import it.unimib.disco.bigtwine.commons.messaging.JobHeartbeatEvent;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
@@ -13,6 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class JobHeartbeatSender implements Serializable {
+    private static final Logger LOG = LoggerFactory.getLogger(ExportResultsJob.class);
 
     private String kafkaBoostrapServer;
     private String topic;
@@ -69,6 +72,8 @@ public class JobHeartbeatSender implements Serializable {
         if (force || this.shouldSendHeartbeat()) {
             this.getKafkaTemplate().send(this.topic, event);
             this.lastSentHeartbeatTs = System.currentTimeMillis();
+
+            LOG.info("Sending heartbeat for job {} ({}, {}, {})", getJobId(), isLast, isFailed, message);
         }
     }
 

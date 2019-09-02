@@ -50,7 +50,7 @@ import java.util.Properties;
 public class TwitterStreamJob {
     private static final Logger LOG = LoggerFactory.getLogger(TwitterStreamJob.class);
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         JobHeartbeatSender heartbeatSender = null;
         try {
             ParameterTool parameters = ParameterTool.fromArgs(args);
@@ -67,6 +67,7 @@ public class TwitterStreamJob {
             }
 
             launchJob(jobId, parameters);
+            LOG.error("Job completed with success");
 
             if (heartbeatSender != null) {
                 heartbeatSender.sendLast();
@@ -78,6 +79,8 @@ public class TwitterStreamJob {
                 heartbeatSender.sendError(e.getLocalizedMessage());
             }
         }
+
+        Thread.sleep(500);
     }
 
     private static void launchJob(String jobId, ParameterTool parameters) throws Exception {
