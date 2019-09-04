@@ -62,10 +62,10 @@ public class ExportResultsJob {
         final String gridFsConnectionUri = String.format("mongodb://%s:%d", Constants.GRIDFS_HOST, Constants.GRIDFS_PORT);
         final String gridFsDbName = Constants.GRIDFS_DB;
 
-        // final String analysisId = parameters.getRequired("analysis-id");
-        // final String documentId = parameters.getRequired("document-id");
-        final String analysisId = "5d6c1418afd5c800014680bc";
-        final String documentId = org.bson.types.ObjectId.get().toHexString();
+        final String analysisId = parameters.getRequired("analysis-id");
+        final String documentId = parameters.getRequired("document-id");
+        // final String analysisId = "5d6c1418afd5c800014680bc";
+        // final String documentId = org.bson.types.ObjectId.get().toHexString();
 
         MongoClient mongoClient = MongoClients.create(mongoConnectionUri);
         MongoCollection<Document> collection = mongoClient

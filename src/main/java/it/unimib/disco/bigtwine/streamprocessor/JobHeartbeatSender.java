@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class JobHeartbeatSender implements Serializable {
-    private static final Logger LOG = LoggerFactory.getLogger(ExportResultsJob.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JobHeartbeatSender.class);
 
     private String kafkaBoostrapServer;
     private String topic;
@@ -70,10 +70,17 @@ public class JobHeartbeatSender implements Serializable {
         event.setTimestamp(Instant.now());
 
         if (force || this.shouldSendHeartbeat()) {
-            this.getKafkaTemplate().send(this.topic, event);
-            this.lastSentHeartbeatTs = System.currentTimeMillis();
-
             LOG.info("Sending heartbeat for job {} ({}, {}, {})", getJobId(), isLast, isFailed, message);
+
+            try {
+                this.getKafkaTemplate().send(this.topic, event);
+                this.lastSentHeartbeatTs = System.currentTimeMillis();
+            } catch (Exception e) {
+                // Ritardo il prossimo invio
+                this.lastSentHeartbeatTs = this.lastSentHeartbeatTs + 1000;
+                LOG.info("Failed to send heartbeat", e);
+            }
+
         }
     }
 
