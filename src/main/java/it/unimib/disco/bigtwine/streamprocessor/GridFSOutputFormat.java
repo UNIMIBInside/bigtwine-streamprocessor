@@ -129,7 +129,8 @@ class GridFSOutputFormat implements OutputFormat<String> {
     @Override
     public void open(int taskNumber, int numTasks) {
         Document metadata = new Document();
-        metadata.put("analysis-id", analysisId);
+        metadata.put("analysisid", analysisId);
+        metadata.put("doctype", "results-export");
 
         GridFSUploadOptions options = new GridFSUploadOptions()
                 .metadata(metadata);
