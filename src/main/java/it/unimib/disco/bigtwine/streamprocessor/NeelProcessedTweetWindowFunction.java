@@ -75,10 +75,15 @@ class NeelProcessedTweetWindowFunction implements WindowFunction<Tuple3<String, 
             }
 
             if (entity.getValue() == null && entity.getPosition() != null && status.getText() != null) {
-                entity.setValue(status.getText().substring(
-                        entity.getPosition().getStart(),
-                        entity.getPosition().getEnd())
-                        .trim());
+                try {
+                    String value = status.getText().substring(
+                            entity.getPosition().getStart(),
+                            entity.getPosition().getEnd()).trim();
+
+                    entity.setValue(value);
+                } catch (StringIndexOutOfBoundsException e) {
+                    e.printStackTrace();
+                }
             }
         }
 
