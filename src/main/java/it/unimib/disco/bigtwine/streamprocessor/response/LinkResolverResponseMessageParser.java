@@ -1,7 +1,7 @@
 package it.unimib.disco.bigtwine.streamprocessor.response;
 
 import it.unimib.disco.bigtwine.commons.messaging.LinkResolverResponseMessage;
-import it.unimib.disco.bigtwine.commons.models.dto.ResourceDTO;
+import it.unimib.disco.bigtwine.commons.messaging.dto.ResourceDTO;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import it.unimib.disco.bigtwine.commons.messaging.AnalysisResultProducedEvent;
 import it.unimib.disco.bigtwine.commons.messaging.JobHeartbeatEvent;
-import it.unimib.disco.bigtwine.commons.models.dto.*;
+import it.unimib.disco.bigtwine.commons.messaging.dto.*;
 import it.unimib.disco.bigtwine.streamprocessor.request.GeoDecoderRequestMessageBuilder;
 import it.unimib.disco.bigtwine.streamprocessor.request.LinkResolverRequestMessageBuilder;
 import it.unimib.disco.bigtwine.streamprocessor.request.NelRequestMessageBuilder;
@@ -228,14 +228,14 @@ public class TwitterStreamJob {
         FlinkKafkaConsumer<String> nerSource = new FlinkKafkaConsumer<>(nerOutputTopic, new SimpleStringSchema(), kafkaConsumerProps);
 
         tweetsStream
-                .map(status -> new BasicTweetDTO(String.valueOf(status.getId()), status.getText()))
+                .map(status -> new PlainTextDTO(String.valueOf(status.getId()), status.getText()))
                 .timeWindowAll(Time.seconds(3))
                 .apply(new NerRequestMessageBuilder(nerOutputTopic, "ner-request-", nerRecognizer))
                 .map(new RequestMessageSerializer<>(nerInputTopic))
                 .addSink(nerSink)
                 .name("NER sink");
 
-        DataStream<RecognizedTweetDTO> recognizedTweetsStream = env
+        DataStream<RecognizedTextDTO> recognizedTweetsStream = env
                 .addSource(nerSource)
                 .flatMap(new NerResponseMessageParser(nerOutputTopic));
 
@@ -252,7 +252,7 @@ public class TwitterStreamJob {
                 .addSink(nelSink)
                 .name("NEL sink");
 
-        DataStream<LinkedTweetDTO> linkedTweetsStream = env
+        DataStream<LinkedTextDTO> linkedTweetsStream = env
                 .addSource(nelSource)
                 .flatMap(new NelResponseMessageParser(nelOutputTopic));
 
@@ -298,8 +298,8 @@ public class TwitterStreamJob {
                 .name("Raw tweet tuple mapper");
 
         DataStream<Tuple3<String, Object, StreamType>> tupleLinkedTweetsStream = linkedTweetsStream
-                .filter((tweet) -> tweet != null && tweet.getId() != null)
-                .map(linkedTweet -> new Tuple3<>(String.valueOf(linkedTweet.getId()), (Object)linkedTweet, StreamType.linkedTweet))
+                .filter((tweet) -> tweet != null && tweet.getTag() != null)
+                .map(linkedTweet -> new Tuple3<>(String.valueOf(linkedTweet.getTag()), (Object)linkedTweet, StreamType.linkedTweet))
                 .returns(new TypeHint<Tuple3<String, Object, StreamType>>(){})
                 .name("Linked tweet tuple mapper");
 
@@ -311,7 +311,7 @@ public class TwitterStreamJob {
 
         DataStream<Tuple3<String, Object, StreamType>> emptyResourcesStream = linkedTweetsStream
                 .filter(TwitterNeelUtils::linkedTweetHasNotLinks)
-                .map(tweet -> new Tuple3<>(String.valueOf(tweet.getId()), (Object)new ArrayList<ResourceDTO>(), StreamType.resource))
+                .map(tweet -> new Tuple3<>(String.valueOf(tweet.getTag()), (Object)new ArrayList<ResourceDTO>(), StreamType.resource))
                 .returns(new TypeHint<Tuple3<String, Object, StreamType>>(){})
                 .name("Empty resource tuple mapper");
 

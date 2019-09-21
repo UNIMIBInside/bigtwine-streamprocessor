@@ -1,12 +1,12 @@
 package it.unimib.disco.bigtwine.streamprocessor;
 
-import it.unimib.disco.bigtwine.commons.models.dto.LinkedEntityDTO;
-import it.unimib.disco.bigtwine.commons.models.dto.LinkedTweetDTO;
+import it.unimib.disco.bigtwine.commons.messaging.dto.LinkedEntityDTO;
+import it.unimib.disco.bigtwine.commons.messaging.dto.LinkedTextDTO;
 import org.apache.commons.lang.StringUtils;
 import twitter4j.Status;
 
 public class TwitterNeelUtils {
-    public static boolean linkedTweetHasLinks(LinkedTweetDTO tweet) {
+    public static boolean linkedTweetHasLinks(LinkedTextDTO tweet) {
         for (LinkedEntityDTO entity : tweet.getEntities()) {
             if (entity.getLink() != null) {
                 return true;
@@ -16,7 +16,7 @@ public class TwitterNeelUtils {
         return false;
     }
 
-    public static boolean linkedTweetHasNotLinks(LinkedTweetDTO tweet) {
+    public static boolean linkedTweetHasNotLinks(LinkedTextDTO tweet) {
         return !linkedTweetHasLinks(tweet);
     }
 

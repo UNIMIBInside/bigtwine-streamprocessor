@@ -41,7 +41,7 @@ dependencies {
 
     compile 'org.mongodb:mongo-java-driver:3.10.2'
 
-    compile 'org.bitbucket.bigtwine:commons:f5c548123f'
+    compile group: 'org.bitbucket.bigtwine', name: 'commons', version: '36dbb056dc'
 
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }

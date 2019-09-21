@@ -1,6 +1,6 @@
 package it.unimib.disco.bigtwine.streamprocessor;
 
-import it.unimib.disco.bigtwine.commons.models.dto.*;
+import it.unimib.disco.bigtwine.commons.messaging.dto.*;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple3;
@@ -50,7 +50,7 @@ class NeelProcessedTweetWindowFunction implements WindowFunction<Tuple3<String, 
                 user.setLocation(_status.getUser().getLocation());
                 statusReceived = true;
             }else if (t.f2 == StreamType.linkedTweet) {
-                LinkedTweetDTO linkedTweet = (LinkedTweetDTO)t.f1;
+                LinkedTextDTO linkedTweet = (LinkedTextDTO)t.f1;
                 entities.addAll(Arrays.asList(linkedTweet.getEntities()));
                 // entitiesReceived = true;
             }else if (t.f2 == StreamType.resource) {

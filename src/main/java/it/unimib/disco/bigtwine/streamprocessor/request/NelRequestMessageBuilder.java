@@ -2,15 +2,15 @@ package it.unimib.disco.bigtwine.streamprocessor.request;
 
 import com.google.common.collect.Iterables;
 import it.unimib.disco.bigtwine.commons.messaging.NelRequestMessage;
-import it.unimib.disco.bigtwine.commons.models.dto.RecognizedTweetDTO;
+import it.unimib.disco.bigtwine.commons.messaging.dto.RecognizedTextDTO;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class NelRequestMessageBuilder extends AbstractRequestMessageBuilder<NelRequestMessage, RecognizedTweetDTO>
-        implements AllWindowFunction<RecognizedTweetDTO, NelRequestMessage, TimeWindow> {
+public class NelRequestMessageBuilder extends AbstractRequestMessageBuilder<NelRequestMessage, RecognizedTextDTO>
+        implements AllWindowFunction<RecognizedTextDTO, NelRequestMessage, TimeWindow> {
     private static final Logger LOG = LoggerFactory.getLogger(NelRequestMessageBuilder.class);
     private String linker;
 
@@ -32,23 +32,23 @@ public class NelRequestMessageBuilder extends AbstractRequestMessageBuilder<NelR
     }
 
     @Override
-    protected NelRequestMessage buildRequest(Iterable<RecognizedTweetDTO> items) {
+    protected NelRequestMessage buildRequest(Iterable<RecognizedTextDTO> items) {
         NelRequestMessage request = new NelRequestMessage();
         this.setCommons(request);
         request.setLinker(linker);
-        request.setTweets(Iterables.toArray(items, RecognizedTweetDTO.class));
+        request.setTexts(Iterables.toArray(items, RecognizedTextDTO.class));
 
         return request;
     }
 
     @Override
-    public void apply(TimeWindow window, Iterable<RecognizedTweetDTO> tweets, Collector<NelRequestMessage> out) throws Exception {
+    public void apply(TimeWindow window, Iterable<RecognizedTextDTO> tweets, Collector<NelRequestMessage> out) throws Exception {
         if (!tweets.iterator().hasNext()) {
             return;
         }
 
         NelRequestMessage request = this.buildRequest(tweets);
-        LOG.debug("Starting nel processing {} tweets", request.getTweets().length);
+        LOG.debug("Starting nel processing {} tweets", request.getTexts().length);
 
         out.collect(request);
     }

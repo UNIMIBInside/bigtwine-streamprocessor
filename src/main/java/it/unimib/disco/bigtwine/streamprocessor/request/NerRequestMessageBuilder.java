@@ -2,7 +2,7 @@ package it.unimib.disco.bigtwine.streamprocessor.request;
 
 import com.google.common.collect.Iterables;
 import it.unimib.disco.bigtwine.commons.messaging.NerRequestMessage;
-import it.unimib.disco.bigtwine.commons.models.dto.BasicTweetDTO;
+import it.unimib.disco.bigtwine.commons.messaging.dto.PlainTextDTO;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
@@ -11,8 +11,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Random;
 
-public class NerRequestMessageBuilder extends AbstractRequestMessageBuilder<NerRequestMessage, BasicTweetDTO>
-        implements AllWindowFunction<BasicTweetDTO, NerRequestMessage, TimeWindow> {
+public class NerRequestMessageBuilder extends AbstractRequestMessageBuilder<NerRequestMessage, PlainTextDTO>
+        implements AllWindowFunction<PlainTextDTO, NerRequestMessage, TimeWindow> {
     private static final Logger LOG = LoggerFactory.getLogger(NerRequestMessageBuilder.class);
 
     private String recognizer;
@@ -35,17 +35,17 @@ public class NerRequestMessageBuilder extends AbstractRequestMessageBuilder<NerR
     }
 
     @Override
-    protected NerRequestMessage buildRequest(Iterable<BasicTweetDTO> tweets) {
+    protected NerRequestMessage buildRequest(Iterable<PlainTextDTO> tweets) {
         NerRequestMessage request = new NerRequestMessage();
         this.setCommons(request);
         request.setRecognizer(this.recognizer);
-        request.setTweets(Iterables.toArray(tweets, BasicTweetDTO.class));
+        request.setTexts(Iterables.toArray(tweets, PlainTextDTO.class));
 
         return request;
     }
 
     @Override
-    public void apply(TimeWindow window, Iterable<BasicTweetDTO> tweets, Collector<NerRequestMessage> out) throws Exception {
+    public void apply(TimeWindow window, Iterable<PlainTextDTO> tweets, Collector<NerRequestMessage> out) throws Exception {
         if (!tweets.iterator().hasNext()) {
             return;
         }
@@ -53,6 +53,6 @@ public class NerRequestMessageBuilder extends AbstractRequestMessageBuilder<NerR
         NerRequestMessage request = this.buildRequest(tweets);
         out.collect(request);
 
-        LOG.debug("Starting ner processing {} tweets", request.getTweets().length);
+        LOG.debug("Starting ner processing {} tweets", request.getTexts().length);
     }
 }

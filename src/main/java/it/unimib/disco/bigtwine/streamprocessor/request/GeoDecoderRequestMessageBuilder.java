@@ -2,7 +2,7 @@ package it.unimib.disco.bigtwine.streamprocessor.request;
 
 import com.google.common.collect.Iterables;
 import it.unimib.disco.bigtwine.commons.messaging.GeoDecoderRequestMessage;
-import it.unimib.disco.bigtwine.commons.models.dto.LocationDTO;
+import it.unimib.disco.bigtwine.commons.messaging.dto.LocationDTO;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
