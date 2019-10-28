@@ -26,6 +26,15 @@ public class Constants {
 
     public static final String JOB_HEARTBEATS_TOPIC = getEnv("JOB_HEARTBEATS_TOPIC", "job-heartbeats");
 
+    /** Max number of seconds to process a tweet from a stream */
+    public static final int STREAM_PROCESSING_TIMEOUT = getEnv("STREAM_PROCESSING_TIMEOUT", 15);
+
+    /** Max number of seconds to process a tweet from a dataset */
+    public static final int DATASET_PROCESSING_TIMEOUT = getEnv("DATASET_PROCESSING_TIMEOUT", 30);
+
+    /** Max number of rows per seconds read from a dataset */
+    public static final int DATASET_READ_MAX_RATE = getEnv("DATASET_READ_MAX_RATE", 4);
+
     public static String getEnv(String name, String fallback) {
         String value = System.getenv(name);
         return value != null ? value : fallback;

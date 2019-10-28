@@ -97,7 +97,8 @@ public class TwitterStreamJob {
         final boolean isDatasetInput = datasetDocumentId != null && !StringUtils.isNullOrWhitespaceOnly(datasetDocumentId);
         final boolean isStreamMode = isQueryInput || isLocationsInput;
 
-        final int processingTimeout = parameters.getInt("processing-timeout", isStreamMode ? 15 : 30);
+        final int processingTimeout = parameters.getInt("processing-timeout",
+                isStreamMode ? Constants.STREAM_PROCESSING_TIMEOUT : Constants.DATASET_PROCESSING_TIMEOUT);
 
         int providedInputCount = 0;
         providedInputCount += BooleanUtils.toInteger(isQueryInput);
@@ -124,6 +125,8 @@ public class TwitterStreamJob {
                         "\tprocessingTimeout = {}",
                 jobId, analysisId, heartbeatInterval, twitterSkipRetweets, processingTimeout
         );
+
+        int datasetNumberOfRows = -1; // Unknown
 
         DataStream<Map<String, String>> datasetStream = null;
         DataStream<String> rawTweetsStream;
@@ -184,7 +187,14 @@ public class TwitterStreamJob {
                     Constants.GRIDFS_HOST,
                     Constants.GRIDFS_PORT,
                     Constants.GRIDFS_DB,
-                    new ObjectId(datasetDocumentId));
+                    new ObjectId(datasetDocumentId),
+                    Constants.DATASET_READ_MAX_RATE);
+
+            if (gridFsSource.getStats() != null) {
+                datasetNumberOfRows = gridFsSource.getStats().getNumberOfRecords();
+            }
+
+            LOG.info("Expected dataset number of records: {}", datasetNumberOfRows);
 
             datasetStream = env
                     .addSource(gridFsSource)
@@ -344,7 +354,9 @@ public class TwitterStreamJob {
                     event.setProcessDate(Instant.now());
                     event.setPayload(tweet);
 
-                    LOG.debug("Analysis result produced for tweet: {}", tweet.getStatus().getId());
+                    LOG.debug("Analysis result produced for tweet: {} - {}",
+                            tweet.getStatus().getId(),
+                            tweet.getEntities() != null ? tweet.getEntities().length : 0);
 
                     return event;
                 })
@@ -401,7 +413,7 @@ public class TwitterStreamJob {
                         .union(s1, s2, s3)
                         .windowAll(GlobalWindows.create())
                         .trigger(DatasetProgressWindowTrigger.create(Time.seconds(heartbeatInterval)))
-                        .apply(DatasetProgressWindowFunction.create(Time.seconds(processingTimeout + 5)))
+                        .apply(DatasetProgressWindowFunction.create(Time.seconds(processingTimeout + 5), datasetNumberOfRows))
                         .setMaxParallelism(1);
 
                 heartbeatStream = progressStream

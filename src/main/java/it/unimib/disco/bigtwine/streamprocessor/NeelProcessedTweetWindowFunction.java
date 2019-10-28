@@ -7,11 +7,15 @@ import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import twitter4j.Status;
 
 import java.util.*;
 
 class NeelProcessedTweetWindowFunction implements WindowFunction<Tuple3<String, Object, StreamType>, NeelProcessedTweetDTO, Tuple, GlobalWindow> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(NeelProcessedTweetWindowFunction.class);
 
     private <TI> TI deserialize(String value, Class<TI> type) {
         byte[] bytes = value.getBytes();
@@ -49,10 +53,12 @@ class NeelProcessedTweetWindowFunction implements WindowFunction<Tuple3<String, 
                 user.setProfileImageUrl(_status.getUser().getProfileImageURL());
                 user.setLocation(_status.getUser().getLocation());
                 statusReceived = true;
+                LOG.debug("Received from stream StreamType.status");
             }else if (t.f2 == StreamType.linkedTweet) {
                 LinkedTextDTO linkedTweet = (LinkedTextDTO)t.f1;
                 entities.addAll(Arrays.asList(linkedTweet.getEntities()));
                 // entitiesReceived = true;
+                LOG.debug("Received from stream StreamType.linkedTweet - count {}", linkedTweet.getEntities().length);
             }else if (t.f2 == StreamType.resource) {
                 @SuppressWarnings("unchecked")
                 List<ResourceDTO> resources = (List<ResourceDTO>)t.f1;
@@ -60,10 +66,12 @@ class NeelProcessedTweetWindowFunction implements WindowFunction<Tuple3<String, 
                     resourcesMap.put(resource.getUrl(), resource);
                 }
                 // resourcesReceived = true;
+                LOG.debug("Received from stream StreamType.resource - count {}", resources.size());
             }else if (t.f2 == StreamType.decodedLocation) {
                 DecodedLocationDTO location = (DecodedLocationDTO)t.f1;
                 user.setCoordinates(location.getCoordinates());
                 // locationReceived = true;
+                LOG.debug("Received from stream StreamType.decodedLocation");
             }
         }
 
@@ -92,6 +100,7 @@ class NeelProcessedTweetWindowFunction implements WindowFunction<Tuple3<String, 
         tweet.setEntities(entities.toArray(new LinkedEntityDTO[0]));
 
         if (statusReceived) {
+            LOG.debug("Collect tweet {} with {} entities", status.getId(), entities.size());
             out.collect(tweet);
         }
     }

@@ -23,7 +23,7 @@ public class TwitterStreamDump {
         final String twitterTokenSecret = "ZuZqAoOrREHGg2P9TkhFjnZEAWhqfQ2Mx7CLUYpXCj2gB";
         final String twitterConsumerKey = "K1RqX1M82afyenoSYxXgaKKpu";
         final String twitterConsumerSecret = "zKzoBATHoanWi5XNDntwDn769j8Cx5yQPRvBvqxdq5Kys7iyXo";
-        final String[] twitterStreamQueryTerms = new String[]{"google", "apple", "microsoft"};
+        final String[] twitterStreamQueryTerms = new String[]{"google", "apple", "microsoft", "iphone", "android"};
         final String[] twitterStreamLangs = new String[]{"en"};
 
         Properties twitterProps = new Properties();
@@ -64,7 +64,7 @@ public class TwitterStreamDump {
                 .returns(new TypeHint<Tuple4<String, String, String, String>>() {});
 
         tweetsStream
-                .writeAsCsv("/Users/fausto/Desktop/tweets.csv", FileSystem.WriteMode.NO_OVERWRITE, "\n", "\t")
+                .writeAsCsv("/Users/fausto/Desktop/tweets2.csv", FileSystem.WriteMode.NO_OVERWRITE, "\n", "\t")
                 .setParallelism(1);
 
         env.execute();

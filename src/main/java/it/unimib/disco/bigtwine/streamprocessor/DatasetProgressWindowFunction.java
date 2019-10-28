@@ -5,21 +5,31 @@ import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DatasetProgressWindowFunction implements AllWindowFunction<Tuple2<Integer, Integer>, Tuple2<Double, Boolean>, GlobalWindow> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DatasetProgressWindowFunction.class);
 
     private final long timeout;
     private long lastChangeTs = -1;
     private long tweets = 0;
     private long processedTweets = 0;
     private boolean datasetCompleted = false;
+    private int expNumberOfRecords = -1;
 
-    public static DatasetProgressWindowFunction create(Time timeout) {
-        return new DatasetProgressWindowFunction(timeout);
+    public static DatasetProgressWindowFunction create(Time timeout, int expNumberOfRecords) {
+        return new DatasetProgressWindowFunction(timeout, expNumberOfRecords);
     }
 
-    private DatasetProgressWindowFunction(Time timeout) {
+    public static DatasetProgressWindowFunction create(Time timeout) {
+        return create(timeout, -1);
+    }
+
+    private DatasetProgressWindowFunction(Time timeout, int expNumberOfRecords) {
         this.timeout = timeout.toMilliseconds();
+        this.expNumberOfRecords = expNumberOfRecords;
     }
 
     @Override
@@ -46,8 +56,19 @@ public class DatasetProgressWindowFunction implements AllWindowFunction<Tuple2<I
             }
         }
 
-        double progress = (processedTweets == 0) ? 0.0 : (processedTweets / (double)tweets);
+        double progress;
+        if (expNumberOfRecords > 0 && expNumberOfRecords > tweets) {
+            progress = (processedTweets / (double)expNumberOfRecords);
+        } else if (tweets == 0) {
+            progress = 0;
+        } else {
+            progress = processedTweets / (double)tweets;
+        }
+
         boolean isLast = datasetCompleted && ((progress == 1.0) || (((System.currentTimeMillis() - lastChangeTs) > timeout)));
+
+        LOG.info("Dataset progress {} (last {}) - {}, {}, {}, {}", (int)(progress * 100), isLast,
+                datasetCompleted, expNumberOfRecords, processedTweets, tweets);
 
         out.collect(new Tuple2<>(progress, isLast));
     }
