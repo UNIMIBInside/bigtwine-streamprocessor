@@ -23,6 +23,9 @@ class GridFSOutputFormat implements OutputFormat<String> {
     private String gridFsDbName;
     private String analysisId;
     private String documentId;
+    private String extension;
+    private String format;
+    private String heading;
     private JobHeartbeatSender heartbeatSender;
 
     private long writtenRecords = 0;
@@ -40,8 +43,11 @@ class GridFSOutputFormat implements OutputFormat<String> {
             String gridFsDbName,
             String documentId,
             String analysisId,
+            String extension,
+            String format,
+            String heading,
             long totalRecords) {
-        this(gridFsConnectionUri, gridFsDbName, documentId, analysisId, totalRecords, null);
+        this(gridFsConnectionUri, gridFsDbName, documentId, analysisId, extension, format, heading, totalRecords, null);
     }
 
     public GridFSOutputFormat(
@@ -49,12 +55,18 @@ class GridFSOutputFormat implements OutputFormat<String> {
             String gridFsDbName,
             String documentId,
             String analysisId,
+            String extension,
+            String format,
+            String heading,
             long totalRecords,
             JobHeartbeatSender heartbeatSender) {
         this.gridFsConnectionUri = gridFsConnectionUri;
         this.gridFsDbName = gridFsDbName;
         this.analysisId = analysisId;
         this.documentId = documentId;
+        this.extension = extension;
+        this.format = format;
+        this.heading = heading;
         this.totalRecords = totalRecords;
         this.heartbeatSender = heartbeatSender;
     }
@@ -89,6 +101,33 @@ class GridFSOutputFormat implements OutputFormat<String> {
 
     public void setDocumentId(String documentId) {
         this.documentId = documentId;
+    }
+
+    public String getExtension() {
+        return extension;
+    }
+
+    public GridFSOutputFormat setExtension(String extension) {
+        this.extension = extension;
+        return this;
+    }
+
+    public String getFormat() {
+        return format;
+    }
+
+    public GridFSOutputFormat setFormat(String format) {
+        this.format = format;
+        return this;
+    }
+
+    public String getHeading() {
+        return heading;
+    }
+
+    public GridFSOutputFormat setHeading(String heading) {
+        this.heading = heading;
+        return this;
     }
 
     public JobHeartbeatSender getHeartbeatSender() {
@@ -131,23 +170,31 @@ class GridFSOutputFormat implements OutputFormat<String> {
         Document metadata = new Document();
         metadata.put("analysisid", analysisId);
         metadata.put("doctype", "results-export");
+        metadata.put("format", format);
 
         GridFSUploadOptions options = new GridFSUploadOptions()
                 .metadata(metadata);
 
         this.uploadStream = this.bucket.openUploadStream(
                 new BsonObjectId(new ObjectId(this.documentId)),
-                "output-" + analysisId + ".tsv",
+                "output-" + analysisId + "." + extension,
                 options
         );
     }
 
-    @Override
-    public void writeRecord(String record) {
+    private void write(String record) {
         byte[] bytes = record.getBytes();
         this.uploadStream.write(bytes);
         this.uploadStream.write(EOL);
+    }
 
+    @Override
+    public void writeRecord(String record) {
+        if (this.writtenRecords == 0 && this.heading != null) {
+            this.write(this.heading);
+        }
+
+        this.write(record);
         this.writtenRecords++;
         LOG.debug("Written records {}", this.writtenRecords);
 

@@ -1,5 +1,6 @@
 package it.unimib.disco.bigtwine.streamprocessor;
 
+import com.google.common.collect.ImmutableMap;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -16,11 +17,26 @@ import org.bson.Document;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
+import java.util.*;
 
 
 public class ExportResultsJob {
+
+    private static final String TSV_FORMAT = "tsv";
+    private static final String JSON_FORMAT = "json";
+    private static final String TWITTER_NEEL_CHALLENGE_FORMAT = "twitter-neel-challenge";
+
     private static final Logger LOG = LoggerFactory.getLogger(ExportResultsJob.class);
+    private static final Set<String> formats = new HashSet<>(Arrays.asList(
+            TSV_FORMAT,
+            JSON_FORMAT,
+            TWITTER_NEEL_CHALLENGE_FORMAT
+    ));
+    private static final Map<String, String> formatExtensions = ImmutableMap.of(
+            TSV_FORMAT, "tsv",
+            JSON_FORMAT, "json",
+            TWITTER_NEEL_CHALLENGE_FORMAT, "tsv"
+    );
 
     public static void main(String[] args) throws Exception {
         JobHeartbeatSender heartbeatSender = null;
@@ -62,10 +78,19 @@ public class ExportResultsJob {
         final String gridFsConnectionUri = String.format("mongodb://%s:%d", Constants.GRIDFS_HOST, Constants.GRIDFS_PORT);
         final String gridFsDbName = Constants.GRIDFS_DB;
 
-        final String analysisId = parameters.getRequired("analysis-id");
-        final String documentId = parameters.getRequired("document-id");
-        // final String analysisId = "5d6c1418afd5c800014680bc";
-        // final String documentId = org.bson.types.ObjectId.get().toHexString();
+        // final String analysisId = parameters.getRequired("analysis-id");
+        // final String documentId = parameters.getRequired("document-id");
+        // final String format = parameters.getRequired("format");
+        final String analysisId = "5d75361a2ccf47000145bcbe";
+        final String documentId = org.bson.types.ObjectId.get().toHexString();
+        System.out.println("Saving to document: " + documentId);
+        final String format = JSON_FORMAT;
+
+        if (!formats.contains(format)) {
+            throw new IllegalArgumentException(
+                    String.format("%s is not a know export format, valid options are: %s", format, String.join(", ", formats))
+            );
+        }
 
         MongoClient mongoClient = MongoClients.create(mongoConnectionUri);
         MongoCollection<Document> collection = mongoClient
@@ -95,22 +120,43 @@ public class ExportResultsJob {
 
         DataSource<Tuple2<BSONWritable, BSONWritable>> input = env.createInput(hdIf);
 
-        DataSet<TwitterNeelResultRow> fin = input.flatMap(new TwitterNeelResultRowMapper());
+        String heading = null;
+        DataSet<String> export;
+        switch (format) {
+            case TWITTER_NEEL_CHALLENGE_FORMAT:
+                export = input
+                        .flatMap(new TwitterNeelResultRowMapper())
+                        .map(row -> String.join("\t",
+                            row.getTweetId(),
+                            row.getPositionStart().toString(),
+                            row.getPositionEnd().toString(),
+                            row.getResourceUri(),
+                            String.valueOf(row.getConfidence()),
+                            row.getCategory()
+                        ));
+                break;
+            case JSON_FORMAT:
+                export = input.flatMap(new AnalysisResultToJsonFlatMapFunction());
+                break;
+            case TSV_FORMAT:
+                TwitterNeelExtendedResultRowCsvMapper csvMapper = new TwitterNeelExtendedResultRowCsvMapper();
+                heading = csvMapper.getHeading();
+                export = input
+                        .flatMap(new TwitterNeelExtendedResultRowMapper())
+                        .map(csvMapper);
+                break;
+            default:
+                return;
+        }
 
-        DataSet<String> tsv = fin.map(row -> String.join("\t",
-                row.getTweetId(),
-                row.getPositionStart().toString(),
-                row.getPositionEnd().toString(),
-                row.getResourceUri(),
-                String.valueOf(row.getConfidence()),
-                row.getCategory())
-        );
-
-        tsv.output(new GridFSOutputFormat(
+        export.output(new GridFSOutputFormat(
                 gridFsConnectionUri,
                 gridFsDbName,
                 documentId,
                 analysisId,
+                formatExtensions.get(format),
+                format,
+                heading,
                 count,
                 heartbeatSender
         )).setParallelism(1);
