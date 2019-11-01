@@ -271,9 +271,14 @@ public class TwitterStreamJob {
         FlinkKafkaProducer<String> linkSink = new FlinkKafkaProducer<>(linkResolverInputTopic, new SimpleStringSchema(), kafkaProducerProps);
         FlinkKafkaConsumer<String> linkSource = new FlinkKafkaConsumer<>(linkResolverOutputTopic, new SimpleStringSchema(), kafkaConsumerProps);
 
+        LinkResolverExtraFieldDTO rdfTypeExtraField = new LinkResolverExtraFieldDTO(
+                "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>",
+                "rdfType",
+                true
+        );
         linkedTweetsStream
                 .filter(TwitterNeelUtils::linkedTweetHasLinks)
-                .map(new LinkResolverRequestMessageBuilder(linkResolverOutputTopic, "linkresolver-request-"))
+                .map(new LinkResolverRequestMessageBuilder(linkResolverOutputTopic, "linkresolver-request-", rdfTypeExtraField))
                 .map(new RequestMessageSerializer<>(linkResolverInputTopic))
                 .addSink(linkSink)
                 .name("Link resolver sink");

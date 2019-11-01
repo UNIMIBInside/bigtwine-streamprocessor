@@ -73,7 +73,7 @@ public class JobHeartbeatSender implements Serializable {
             LOG.info("Sending heartbeat for job {} ({}, {}, {})", getJobId(), isLast, isFailed, message);
 
             try {
-                // this.getKafkaTemplate().send(this.topic, event);
+                this.getKafkaTemplate().send(this.topic, event);
                 this.lastSentHeartbeatTs = System.currentTimeMillis();
             } catch (Exception e) {
                 // Ritardo il prossimo invio

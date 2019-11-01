@@ -3,6 +3,7 @@ package it.unimib.disco.bigtwine.streamprocessor.request;
 import com.google.common.collect.Iterables;
 import it.unimib.disco.bigtwine.commons.messaging.LinkResolverRequestMessage;
 import it.unimib.disco.bigtwine.commons.messaging.dto.LinkDTO;
+import it.unimib.disco.bigtwine.commons.messaging.dto.LinkResolverExtraFieldDTO;
 import it.unimib.disco.bigtwine.commons.messaging.dto.LinkedEntityDTO;
 import it.unimib.disco.bigtwine.commons.messaging.dto.LinkedTextDTO;
 import org.apache.flink.api.common.functions.MapFunction;
@@ -16,6 +17,7 @@ public class LinkResolverRequestMessageBuilder extends AbstractRequestMessageBui
         implements MapFunction<LinkedTextDTO, LinkResolverRequestMessage> {
     private static final Logger LOG = LoggerFactory.getLogger(LinkResolverRequestMessageBuilder.class);
 
+    private LinkResolverExtraFieldDTO[] extraFields;
 
     public LinkResolverRequestMessageBuilder() {
     }
@@ -24,11 +26,17 @@ public class LinkResolverRequestMessageBuilder extends AbstractRequestMessageBui
         super(outputTopic, requestIdPrefix);
     }
 
+    public LinkResolverRequestMessageBuilder(String outputTopic, String requestIdPrefix, LinkResolverExtraFieldDTO ...extraFields) {
+        this(outputTopic, requestIdPrefix);
+        this.extraFields = extraFields;
+    }
+
     @Override
     protected LinkResolverRequestMessage buildRequest(Iterable<LinkDTO> items) {
         LinkResolverRequestMessage request = new LinkResolverRequestMessage();
         this.setCommons(request);
         request.setLinks(Iterables.toArray(items, LinkDTO.class));
+        request.setExtraFields(this.extraFields);
 
         return request;
     }
