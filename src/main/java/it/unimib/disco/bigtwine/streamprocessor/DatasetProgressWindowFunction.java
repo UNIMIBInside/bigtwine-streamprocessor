@@ -57,12 +57,11 @@ public class DatasetProgressWindowFunction implements AllWindowFunction<Tuple2<I
         }
 
         double progress;
-        if (expNumberOfRecords > 0 && expNumberOfRecords > tweets) {
-            progress = (processedTweets / (double)expNumberOfRecords);
-        } else if (tweets == 0) {
-            progress = 0;
+        double numberOfTweets = datasetCompleted ? tweets : expNumberOfRecords;
+        if (numberOfTweets > 0) {
+            progress = (processedTweets / numberOfTweets);
         } else {
-            progress = processedTweets / (double)tweets;
+            progress = 0;
         }
 
         boolean isLast = datasetCompleted && ((progress == 1.0) || (((System.currentTimeMillis() - lastChangeTs) > timeout)));
