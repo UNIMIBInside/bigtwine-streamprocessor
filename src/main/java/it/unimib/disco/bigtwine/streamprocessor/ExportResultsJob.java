@@ -31,12 +31,14 @@ public class ExportResultsJob {
     private static final Set<String> formats = new HashSet<>(Arrays.asList(
             TSV_FORMAT,
             JSON_FORMAT,
-            TWITTER_NEEL_CHALLENGE_FORMAT
+            TWITTER_NEEL_CHALLENGE_FORMAT,
+            TWITTER_NEEL_DATASET_FORMAT
     ));
     private static final Map<String, String> formatExtensions = ImmutableMap.of(
             TSV_FORMAT, "tsv",
             JSON_FORMAT, "json",
-            TWITTER_NEEL_CHALLENGE_FORMAT, "tsv"
+            TWITTER_NEEL_CHALLENGE_FORMAT, "tsv",
+            TWITTER_NEEL_DATASET_FORMAT, "tsv"
     );
 
     public static void main(String[] args) throws Exception {
