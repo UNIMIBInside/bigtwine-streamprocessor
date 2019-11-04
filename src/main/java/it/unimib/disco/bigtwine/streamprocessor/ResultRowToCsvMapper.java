@@ -5,7 +5,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import org.apache.flink.api.common.functions.MapFunction;
 
-public class TwitterNeelExtendedResultRowCsvMapper implements MapFunction<TwitterNeelExtendedResultRow, String> {
+public class ResultRowToCsvMapper<IN> implements MapFunction<IN, String> {
 
     private transient CsvSchema csvSchema;
     private transient CsvMapper csvMapper;
@@ -55,7 +55,7 @@ public class TwitterNeelExtendedResultRowCsvMapper implements MapFunction<Twitte
     }
 
     @Override
-    public String map(TwitterNeelExtendedResultRow value) throws Exception {
+    public String map(IN value) throws Exception {
         return this.getObjectWriter().writeValueAsString(value);
     }
 }
