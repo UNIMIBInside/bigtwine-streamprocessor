@@ -18,9 +18,10 @@ public class NelRequestMessageBuilder extends AbstractRequestMessageBuilder<NelR
         super();
     }
 
-    public NelRequestMessageBuilder(String outputTopic, String requestIdPrefix, String linker) {
+    public NelRequestMessageBuilder(String outputTopic, String requestIdPrefix, String linker, int timeout) {
         super(outputTopic, requestIdPrefix);
         this.linker = linker;
+        this.timeout = timeout;
     }
 
     public String getLinker() {

@@ -21,9 +21,10 @@ public class NerRequestMessageBuilder extends AbstractRequestMessageBuilder<NerR
         super();
     }
 
-    public NerRequestMessageBuilder(String outputTopic, String requestIdPrefix, String recognizer) {
+    public NerRequestMessageBuilder(String outputTopic, String requestIdPrefix, String recognizer, int timeout) {
         super(outputTopic, requestIdPrefix);
         this.recognizer = recognizer;
+        this.timeout = timeout;
     }
 
     public String getRecognizer() {

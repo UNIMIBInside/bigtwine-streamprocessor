@@ -26,8 +26,9 @@ public class LinkResolverRequestMessageBuilder extends AbstractRequestMessageBui
         super(outputTopic, requestIdPrefix);
     }
 
-    public LinkResolverRequestMessageBuilder(String outputTopic, String requestIdPrefix, LinkResolverExtraFieldDTO ...extraFields) {
+    public LinkResolverRequestMessageBuilder(String outputTopic, String requestIdPrefix, int timeout, LinkResolverExtraFieldDTO ...extraFields) {
         this(outputTopic, requestIdPrefix);
+        this.timeout = timeout;
         this.extraFields = extraFields;
     }
 

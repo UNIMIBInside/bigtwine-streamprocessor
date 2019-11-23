@@ -240,7 +240,7 @@ public class TwitterStreamJob {
         tweetsStream
                 .map(status -> new PlainTextDTO(String.valueOf(status.getId()), status.getText()))
                 .timeWindowAll(Time.seconds(3))
-                .apply(new NerRequestMessageBuilder(nerOutputTopic, "ner-request-", nerRecognizer))
+                .apply(new NerRequestMessageBuilder(nerOutputTopic, "ner-request-", nerRecognizer, processingTimeout))
                 .map(new RequestMessageSerializer<>(nerInputTopic))
                 .addSink(nerSink)
                 .name("NER sink");
@@ -257,7 +257,7 @@ public class TwitterStreamJob {
 
         recognizedTweetsStream
                 .timeWindowAll(Time.seconds(3))
-                .apply(new NelRequestMessageBuilder(nelOutputTopic, "nel-request-", nelLinker))
+                .apply(new NelRequestMessageBuilder(nelOutputTopic, "nel-request-", nelLinker, processingTimeout))
                 .map(new RequestMessageSerializer<>(nelInputTopic))
                 .addSink(nelSink)
                 .name("NEL sink");
@@ -278,7 +278,7 @@ public class TwitterStreamJob {
         );
         linkedTweetsStream
                 .filter(TwitterNeelUtils::linkedTweetHasLinks)
-                .map(new LinkResolverRequestMessageBuilder(linkResolverOutputTopic, "linkresolver-request-", rdfTypeExtraField))
+                .map(new LinkResolverRequestMessageBuilder(linkResolverOutputTopic, "linkresolver-request-", processingTimeout, rdfTypeExtraField))
                 .map(new RequestMessageSerializer<>(linkResolverInputTopic))
                 .addSink(linkSink)
                 .name("Link resolver sink");
@@ -297,7 +297,7 @@ public class TwitterStreamJob {
                 .filter(TwitterNeelUtils::statusHasUserLocation)
                 .map(status -> new LocationDTO(status.getUser().getLocation(), String.valueOf(status.getId())))
                 .timeWindowAll(Time.seconds(3))
-                .apply(new GeoDecoderRequestMessageBuilder(geoDecoderOutputTopic, "geodecoder-request-", geoDecoder, 15))
+                .apply(new GeoDecoderRequestMessageBuilder(geoDecoderOutputTopic, "geodecoder-request-", geoDecoder, 15, processingTimeout))
                 .map(new RequestMessageSerializer<>(geoDecoderInputTopic))
                 .addSink(geoSink)
                 .name("Geo decoder sink");

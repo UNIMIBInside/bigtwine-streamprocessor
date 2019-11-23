@@ -26,8 +26,8 @@ public class GeoDecoderRequestMessageBuilder extends AbstractRequestMessageBuild
         this.decoder = decoder;
     }
 
-    public GeoDecoderRequestMessageBuilder(String outputTopic, String requestIdPrefix, String decoder, int maxItemsPerRequest) {
-        super(outputTopic, requestIdPrefix, maxItemsPerRequest);
+    public GeoDecoderRequestMessageBuilder(String outputTopic, String requestIdPrefix, String decoder, int maxItemsPerRequest, int timeout) {
+        super(outputTopic, requestIdPrefix, maxItemsPerRequest, timeout);
         this.decoder = decoder;
     }
 

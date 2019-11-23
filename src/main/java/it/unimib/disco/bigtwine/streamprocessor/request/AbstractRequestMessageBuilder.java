@@ -11,6 +11,7 @@ public abstract class AbstractRequestMessageBuilder<T extends RequestMessage, M>
     protected String outputTopic;
     protected String requestIdPrefix;
     protected int maxItemsPerRequest = -1;
+    protected int timeout = -1;
 
     public AbstractRequestMessageBuilder() {
     }
@@ -20,9 +21,10 @@ public abstract class AbstractRequestMessageBuilder<T extends RequestMessage, M>
         this.requestIdPrefix = requestIdPrefix;
     }
 
-    protected AbstractRequestMessageBuilder(String outputTopic, String requestIdPrefix, int maxItemsPerRequest) {
+    protected AbstractRequestMessageBuilder(String outputTopic, String requestIdPrefix, int maxItemsPerRequest, int timeout) {
         this(outputTopic, requestIdPrefix);
         this.maxItemsPerRequest = maxItemsPerRequest;
+        this.timeout = timeout;
     }
 
     protected abstract T buildRequest(Iterable<M> items);
@@ -42,6 +44,9 @@ public abstract class AbstractRequestMessageBuilder<T extends RequestMessage, M>
     protected void setCommons(T request) {
         request.setRequestId(String.format("%s%d", this.requestIdPrefix, new Random().nextLong()));
         request.setOutputTopic(outputTopic);
+        if (timeout > 0) {
+            request.setExpiration(System.currentTimeMillis() + this.timeout);
+        }
     }
 
     public String getOutputTopic() {
