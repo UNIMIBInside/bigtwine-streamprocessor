@@ -45,7 +45,7 @@ public abstract class AbstractRequestMessageBuilder<T extends RequestMessage, M>
         request.setRequestId(String.format("%s%d", this.requestIdPrefix, new Random().nextLong()));
         request.setOutputTopic(outputTopic);
         if (timeout > 0) {
-            request.setExpiration(System.currentTimeMillis() + this.timeout);
+            request.setExpiration(System.currentTimeMillis() + (this.timeout * 1000));
         }
     }
 
