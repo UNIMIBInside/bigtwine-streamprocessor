@@ -2,6 +2,7 @@ package it.unimib.disco.bigtwine.streamprocessor;
 
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.java.tuple.Tuple4;
+import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -17,12 +18,13 @@ public class TwitterStreamDump {
 
     public static void main(String[] args) throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        final ParameterTool parameters = ParameterTool.fromArgs(args);
 
         // ----- TWITTER STREAM SOURCE
-        final String twitterToken = "96366271-uA7vHwZkeXSI7iJa0jHRUO68xEi7qG3TmF1Z44pJX";
-        final String twitterTokenSecret = "ZuZqAoOrREHGg2P9TkhFjnZEAWhqfQ2Mx7CLUYpXCj2gB";
-        final String twitterConsumerKey = "K1RqX1M82afyenoSYxXgaKKpu";
-        final String twitterConsumerSecret = "zKzoBATHoanWi5XNDntwDn769j8Cx5yQPRvBvqxdq5Kys7iyXo";
+        final String twitterToken = parameters.getRequired("twitter-token");
+        final String twitterTokenSecret = parameters.getRequired("twitter-token-secret");
+        final String twitterConsumerKey = parameters.getRequired("twitter-consumer-key");
+        final String twitterConsumerSecret = parameters.getRequired("twitter-consumer-secret");
         final String[] twitterStreamQueryTerms = new String[]{"google", "apple", "microsoft", "iphone", "android"};
         final String[] twitterStreamLangs = new String[]{"en"};
 
